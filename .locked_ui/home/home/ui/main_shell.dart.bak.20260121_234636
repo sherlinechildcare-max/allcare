@@ -1,0 +1,81 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+// Tab screens
+import '../presentation/client_home_tab.dart';
+import '../presentation/client_requests_tab.dart';
+import '../presentation/client_messages_tab.dart';
+import '../presentation/client_profile_tab.dart';
+
+/// Used by AppRouter ShellRoute:
+/// builder: (context, state, child) => MainShell(child: child),
+class MainShell extends StatelessWidget {
+  final Widget child;
+  const MainShell({super.key, required this.child});
+
+  int _indexFromLocation(String loc) {
+    final l = loc.toLowerCase();
+    if (l.startsWith('/client/requests')) return 1;
+    if (l.startsWith('/client/messages')) return 2;
+    if (l.startsWith('/client/profile')) return 3;
+    return 0; // /client/home (default)
+  }
+
+  void _goToIndex(BuildContext context, int index) {
+    switch (index) {
+      case 1:
+        context.go('/client/requests');
+        return;
+      case 2:
+        context.go('/client/messages');
+        return;
+      case 3:
+        context.go('/client/profile');
+        return;
+      case 0:
+      default:
+        context.go('/client/home');
+        return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Works across go_router versions:
+    final loc = GoRouterState.of(context).uri.toString();
+    final currentIndex = _indexFromLocation(loc);
+
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (i) => _goToIndex(context, i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.list_alt_outlined), label: 'Requests'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Messages'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+/// These are the Widgets AppRouter constructs (const ClientRequestsTab(), etc.)
+class ClientRequestsTab extends StatelessWidget {
+  const ClientRequestsTab({super.key});
+  @override
+  Widget build(BuildContext context) => const ClientRequestsTabScreen();
+}
+
+class ClientMessagesTab extends StatelessWidget {
+  const ClientMessagesTab({super.key});
+  @override
+  Widget build(BuildContext context) => const ClientMessagesTabScreen();
+}
+
+class ClientProfileTab extends StatelessWidget {
+  const ClientProfileTab({super.key});
+  @override
+  Widget build(BuildContext context) => const ClientProfileTabScreen();
+}

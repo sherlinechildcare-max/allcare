@@ -1,0 +1,96 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+// Tab screens (your existing files)
+import '../presentation/client_home_tab.dart';
+import '../presentation/client_requests_tab.dart';
+import '../presentation/client_messages_tab.dart';
+import '../presentation/client_profile_tab.dart';
+
+/// App shell used by AppRouter:
+/// builder: (context, state, child) => MainShell(child: child),
+class MainShell extends StatelessWidget {
+  final Widget child;
+
+  const MainShell({super.key, required this.child});
+
+  int _indexFromLocation(String loc) {
+    // Keep this robust: match by path keywords.
+    final l = loc.toLowerCase();
+    if (l.contains('requests')) return 1;
+    if (l.contains('messages') || l.contains('chat')) return 2;
+    if (l.contains('profile')) return 3;
+    return 0;
+  }
+
+  void _goToIndex(BuildContext context, int index) {
+    // Prefer named routes if you have them; otherwise use simple paths.
+    // These "contains" routes work if your routes include these segments.
+    switch (index) {
+      case 1:
+        context.go('/client/requests');
+        return;
+      case 2:
+        context.go('/client/messages');
+        return;
+      case 3:
+        context.go('/client/profile');
+        return;
+      case 0:
+      default:
+        context.go('/client/home');
+        return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // go_router location (works across versions)
+    final loc = GoRouterState.of(context).uri.toString();
+    final currentIndex = _indexFromLocation(loc);
+
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (i) => _goToIndex(context, i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.list_alt_outlined), label: 'Requests'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Messages'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+/// --- Client tab widgets expected by app_router.dart ---
+/// These MUST be Widgets (classes), because AppRouter is doing `const XyzTab()`.
+class ClientHomeTabLegacy extends StatelessWidget {
+  const ClientHomeTabLegacy({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ClientHomeTabScreen();
+}
+
+class ClientRequestsTab extends StatelessWidget {
+  const ClientRequestsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ClientRequestsTabScreen();
+}
+
+class ClientMessagesTab extends StatelessWidget {
+  const ClientMessagesTab({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ClientMessagesTabScreen();
+}
+
+class ClientProfileTab extends StatelessWidget {
+  const ClientProfileTab({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ClientProfileTabScreen();
+}
