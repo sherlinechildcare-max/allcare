@@ -26,3 +26,24 @@ ios/Flutter/app.flx
 
 # OS
 .DS_Store
+
+# Flutter / Dart
+.dart_tool/
+build/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android / iOS
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
