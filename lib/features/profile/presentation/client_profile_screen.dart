@@ -52,7 +52,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     try {
       final row = await supabase
           .from('profiles')
-          .select('id, full_name, phone, city, bio, avatar_url, onboarding_completed')
+          .select(
+            'id, full_name, phone, city, bio, avatar_url, onboarding_completed',
+          )
           .eq('id', user.id)
           .maybeSingle();
 
@@ -63,9 +65,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       _avatarUrl = row?['avatar_url']?.toString();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Profile load error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Profile load error: $e')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -80,22 +82,24 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     try {
       await supabase.from('profiles').upsert({
         'id': user.id,
-        'full_name': _fullName.text.trim().isEmpty ? null : _fullName.text.trim(),
+        'full_name': _fullName.text.trim().isEmpty
+            ? null
+            : _fullName.text.trim(),
         'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
         'bio': _bio.text.trim().isEmpty ? null : _bio.text.trim(),
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Saved')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -107,23 +111,32 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     if (user == null) return;
 
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
     if (picked == null) return;
 
     setState(() => _saving = true);
     try {
       final bytes = await picked.readAsBytes();
       final ext = p.extension(picked.name).toLowerCase();
-      final safeExt = (ext == '.png' || ext == '.jpg' || ext == '.jpeg') ? ext : '.jpg';
+      final safeExt = (ext == '.png' || ext == '.jpg' || ext == '.jpeg')
+          ? ext
+          : '.jpg';
 
       final objectPath = '${user.id}/avatar$safeExt';
-      await supabase.storage.from('avatars').uploadBinary(
+      await supabase.storage
+          .from('avatars')
+          .uploadBinary(
             objectPath,
             Uint8List.fromList(bytes),
             fileOptions: const FileOptions(upsert: true),
           );
 
-      final publicUrl = supabase.storage.from('avatars').getPublicUrl(objectPath);
+      final publicUrl = supabase.storage
+          .from('avatars')
+          .getPublicUrl(objectPath);
 
       await supabase.from('profiles').upsert({
         'id': user.id,
@@ -134,15 +147,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile photo updated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Avatar upload failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Avatar upload failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -162,7 +175,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       body: _loading
@@ -176,7 +192,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       onTap: _saving ? null : _pickAndUploadAvatar,
                       child: CircleAvatar(
                         radius: 34,
-                        backgroundImage: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                        backgroundImage:
+                            (_avatarUrl == null || _avatarUrl!.isEmpty)
                             ? null
                             : NetworkImage(_avatarUrl!),
                         child: (_avatarUrl == null || _avatarUrl!.isEmpty)
@@ -189,9 +206,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Signed in as:', style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            'Signed in as:',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                           const SizedBox(height: 2),
-                          Text(email, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          Text(
+                            email,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           const SizedBox(height: 6),
                           TextButton.icon(
                             onPressed: _saving ? null : _pickAndUploadAvatar,
@@ -207,27 +230,39 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
                 TextField(
                   controller: _fullName,
-                  decoration: const InputDecoration(labelText: 'Full name', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Full name',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 TextField(
                   controller: _phone,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 TextField(
                   controller: _city,
-                  decoration: const InputDecoration(labelText: 'City', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'City',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 TextField(
                   controller: _bio,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Bio (optional)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Bio (optional)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -235,7 +270,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _saving ? null : _save,
-                    child: _saving ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator()) : const Text('Save'),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(),
+                          )
+                        : const Text('Save'),
                   ),
                 ),
                 const SizedBox(height: 8),
