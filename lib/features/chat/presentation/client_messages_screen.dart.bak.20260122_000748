@@ -1,0 +1,42 @@
+import 'package:flutter/material.dart';
+import '../data/mock_chats.dart';
+import 'chat_thread_screen.dart';
+
+class ClientMessagesScreen extends StatelessWidget {
+  const ClientMessagesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Messages')),
+      body: ListView.separated(
+        itemCount: mockThreads.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, i) {
+          final t = mockThreads[i];
+          return ListTile(
+            title: Text(t.title),
+            subtitle: Text(t.lastMessage),
+            trailing: t.unread > 0
+                ? CircleAvatar(
+                    radius: 10,
+                    child: Text(
+                      '${t.unread}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  )
+                : null,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ChatThreadScreen(),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}

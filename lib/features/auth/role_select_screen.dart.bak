@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class RoleSelectScreen extends StatefulWidget {
+  const RoleSelectScreen({super.key});
+
+  @override
+  State<RoleSelectScreen> createState() => _RoleSelectScreenState();
+}
+
+class _RoleSelectScreenState extends State<RoleSelectScreen> {
+  String role = 'client';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Welcome to AllCare')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Email'),
+            const TextField(
+              enabled: false,
+              decoration: InputDecoration(
+                hintText: 'UI mode (auth disabled)',
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Role'),
+            DropdownButtonFormField<String>(
+              value: role,
+              items: const [
+                DropdownMenuItem(value: 'client', child: Text('Client')),
+                DropdownMenuItem(value: 'caregiver', child: Text('Caregiver')),
+                DropdownMenuItem(value: 'agency', child: Text('Agency')),
+                DropdownMenuItem(value: 'admin', child: Text('Admin')),
+              ],
+              onChanged: (v) => setState(() => role = v!),
+            ),
+            const Spacer(),
+            FilledButton(
+              onPressed: () {
+                switch (role) {
+                  case 'caregiver':
+                    context.go('/dev/caregiver');
+                    break;
+                  case 'agency':
+                    context.go('/dev/agency');
+                    break;
+                  case 'admin':
+                    context.go('/dev/admin');
+                    break;
+                  default:
+                    context.go('/client/home');
+                }
+              },
+              child: const Text('Continue (UI Mode)'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

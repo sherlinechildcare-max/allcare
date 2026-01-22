@@ -1,0 +1,657 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class ClientRequestsTabScreen extends StatefulWidget {
+  const ClientRequestsTabScreen({super.key});
+
+  @override
+  State<ClientRequestsTabScreen> createState() => _ClientRequestsTabScreenState();
+}
+
+class _ClientRequestsTabScreenState extends State<ClientRequestsTabScreen> {
+  final _search = TextEditingController();
+
+  String _selectedStatus = 'All';
+  String _sort = 'Newest';
+
+  // UI state simulator (like Home)
+  bool _loading = false;
+  bool _error = false;
+
+  // UI-only placeholder requests (wire Supabase later)
+  final List<_ClientRequest> _all = [
+    _ClientRequest(
+      title: 'Help with shower + meal prep',
+      category: 'Personal Care',
+      whenText: 'Today',
+      durationText: '2 hrs',
+      locationText: 'Near you',
+      priceText: r'$18–$22/hr',
+      status: 'Pending',
+      offersCount: 3,
+      lastUpdateText: 'Updated 10m ago',
+    ),
+    _ClientRequest(
+      title: 'Night shift companionship',
+      category: 'Companionship',
+      whenText: 'Tomorrow',
+      durationText: '8 hrs',
+      locationText: '2.4 km away',
+      priceText: r'$16–$20/hr',
+      status: 'Sent',
+      offersCount: 1,
+      lastUpdateText: 'Updated 1h ago',
+    ),
+    _ClientRequest(
+      title: 'Medication reminders + light cleanup',
+      category: 'Home Support',
+      whenText: 'Fri',
+      durationText: '1 hr',
+      locationText: 'Your area',
+      priceText: r'$14–$18/hr',
+      status: 'Accepted',
+      offersCount: 5,
+      lastUpdateText: 'Updated yesterday',
+    ),
+    _ClientRequest(
+      title: 'Post-op help (mobility + meals)',
+      category: 'Nursing',
+      whenText: 'Next week',
+      durationText: '3 hrs',
+      locationText: 'New York',
+      priceText: r'$22–$30/hr',
+      status: 'Completed',
+      offersCount: 7,
+      lastUpdateText: 'Completed',
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  List<_ClientRequest> get _filtered {
+    final q = _search.text.trim().toLowerCase();
+
+    Iterable<_ClientRequest> items = _all;
+
+    if (_selectedStatus != 'All') {
+      items = items.where((r) => r.status == _selectedStatus);
+    }
+
+    if (q.isNotEmpty) {
+      items = items.where((r) {
+        return r.title.toLowerCase().contains(q) ||
+            r.category.toLowerCase().contains(q) ||
+            r.locationText.toLowerCase().contains(q);
+      });
+    }
+
+    var list = items.toList();
+
+    // Production-ready sorting
+    if (_sort == 'Newest') {
+      list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    } else if (_sort == 'Oldest') {
+      list.sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
+    } else if (_sort == 'Status') {
+      list.sort((a, b) => a.status.compareTo(b.status));
+    } else if (_sort == 'Most applicants') {
+      list.sort((a, b) => b.offersCount.compareTo(a.offersCount));
+    }
+    return list;
+  }
+
+  void _openSortSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final options = const ['Newest', 'Oldest', 'Status', 'Most applicants'];
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Sort', style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                ...options.map((opt) {
+                  return RadioListTile<String>(
+                    value: opt,
+                    groupValue: _sort,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      Navigator.pop(ctx);
+                      setState(() => _sort = v);
+                    },
+                    title: Text(opt),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openFiltersSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'UI state simulator',
+                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _loading,
+                  onChanged: (v) => setState(() {
+                    _loading = v;
+                    if (v) _error = false;
+                  }),
+                  title: const Text('Loading'),
+                  subtitle: const Text('Show skeletons'),
+                ),
+                SwitchListTile(
+                  value: _error,
+                  onChanged: (v) => setState(() {
+                    _error = v;
+                    if (v) _loading = false;
+                  }),
+                  title: const Text('Error'),
+                  subtitle: const Text('Show error + retry'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _postRequest() {
+    // Main funnel: go to Requests flow / create request screen (for now just route to requests tab itself)
+    // If you later have a create-request route, change to: context.push('/client/requests/new');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Create request (UI-only placeholder). Wire create flow later.')),
+    );
+  }
+
+  void _openRequestDetails(_ClientRequest r) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(r.title, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _pill(Icons.category_outlined, r.category),
+                    _pill(Icons.schedule_outlined, '${r.whenText} • ${r.durationText}'),
+                    _pill(Icons.place_outlined, r.locationText),
+                    _pill(Icons.payments_outlined, r.priceText),
+                    _pill(Icons.info_outline, r.status),
+                    _pill(Icons.group_outlined, 'Applicants: ${r.offersCount}'),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'UI-only placeholder details.\n\nProduction: show timeline, offers, caregiver matches, chat shortcuts, and actions (edit/cancel/duplicate).',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Request details screen (UI-only placeholder)')),
+                          );
+                        },
+                        child: const Text('View details'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Edit request (UI-only placeholder)')),
+                          );
+                        },
+                        child: const Text('Edit'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static Widget _pill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Reserve space for bottom CTA so it NEVER covers list content:
+    final bottomReserve = 16 + 56 + 16 + MediaQuery.of(context).padding.bottom;
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: Stack(
+        children: [
+          ListView(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, bottomReserve),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Requests', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                  ),
+                  IconButton(
+                    tooltip: 'Sort',
+                    onPressed: _openSortSheet,
+                    icon: const Icon(Icons.sort),
+                  ),
+                  IconButton(
+                    tooltip: 'Filters / states',
+                    onPressed: _openFiltersSheet,
+                    icon: const Icon(Icons.tune),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search requests…',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+
+              const SizedBox(height: 10),
+
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _chip('All'),
+                    const SizedBox(width: 8),
+                    _chip('Pending'),
+                    const SizedBox(width: 8),
+                    _chip('Sent'),
+                    const SizedBox(width: 8),
+                    _chip('Accepted'),
+                    const SizedBox(width: 8),
+                    _chip('Completed'),
+                    const SizedBox(width: 8),
+                    _chip('Cancelled'),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Showing ${_filtered.length}  •  Sort: $_sort',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _postRequest,
+                    icon: const Icon(Icons.add),
+                    label: const Text('New'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              if (_loading) ...[
+                _skeletonCard(),
+                const SizedBox(height: 10),
+                _skeletonCard(),
+                const SizedBox(height: 10),
+                _skeletonCard(),
+              ] else if (_error) ...[
+                _errorCard(),
+              ] else if (_filtered.isEmpty) ...[
+                _emptyCard(),
+              ] else ...[
+                ..._filtered.map((r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _requestCard(r),
+                    )),
+                const SizedBox(height: 8),
+                _offersInfoCard(),
+              ],
+            ],
+          ),
+
+          // ✅ FIXED: CTA always visible, correct size, never overlaps nav bar
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: _postRequest,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Post a request'),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label) {
+    final selected = _selectedStatus == label;
+    return ChoiceChip(
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false),
+      selected: selected,
+      onSelected: (_) => setState(() => _selectedStatus = label),
+    );
+  }
+
+  Widget _requestCard(_ClientRequest r) {
+    final theme = Theme.of(context);
+
+    Color? statusBg;
+    if (r.status == 'Pending') statusBg = Colors.orange.shade50;
+    if (r.status == 'Accepted') statusBg = Colors.green.shade50;
+    if (r.status == 'Completed') statusBg = Colors.blue.shade50;
+
+    return Card(
+      child: InkWell(
+        onTap: () => _openRequestDetails(r),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.assignment_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      r.title,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      border: Border.all(color: Colors.black12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(r.status, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              Text(
+                '${r.category}  •  ${r.whenText}  •  ${r.durationText}',
+                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ),
+
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  const Icon(Icons.place_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(r.locationText, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.payments_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Text(r.priceText, style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  const Icon(Icons.group_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Text('${r.offersCount} offer(s)'),
+                  const Spacer(),
+                  Text(r.lastUpdateText, style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _offersInfoCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('How offers work', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  const Text('Caregivers can send offers for your request. Review profiles, chat in-app, and confirm details before booking.'),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Learn more (UI-only placeholder)')),
+                      );
+                    },
+                    child: const Text('Learn more'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyCard() {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            const Icon(Icons.inbox_outlined, size: 44),
+            const SizedBox(height: 12),
+            Text('No requests found', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            const Text(
+              'Post a request to start getting offers from caregivers.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 46,
+              child: FilledButton.icon(
+                onPressed: _postRequest,
+                icon: const Icon(Icons.add),
+                label: const Text('Post a request'),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _errorCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            const Icon(Icons.wifi_off_outlined, size: 44),
+            const SizedBox(height: 12),
+            const Text(
+              'Could not load requests',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Check your connection and try again.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => setState(() => _error = false),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _skeletonCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Container(height: 18, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6))),
+            const SizedBox(height: 10),
+            Container(height: 14, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6))),
+            const SizedBox(height: 10),
+            Container(height: 14, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6))),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: Container(height: 14, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6)))),
+                const SizedBox(width: 10),
+                Expanded(child: Container(height: 14, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6)))),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientRequest {
+  final String title;
+  final String category;
+  final String whenText;
+  final String durationText;
+  final String locationText;
+  final String priceText;
+  final String status;
+  final int offersCount;
+  final String lastUpdateText;
+
+  const _ClientRequest({
+    required this.title,
+    required this.category,
+    required this.whenText,
+    required this.durationText,
+    required this.locationText,
+    required this.priceText,
+    required this.status,
+    required this.offersCount,
+    required this.lastUpdateText,
+  });
+}

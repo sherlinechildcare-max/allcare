@@ -1,0 +1,742 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class ClientRequestsTabScreen extends StatefulWidget {
+  const ClientRequestsTabScreen({super.key});
+
+  @override
+  State<ClientRequestsTabScreen> createState() => _ClientRequestsTabScreenState();
+}
+
+class _ClientRequestsTabScreenState extends State<ClientRequestsTabScreen> {
+  final _search = TextEditingController();
+
+  String _statusFilter = 'All';
+  String _sort = 'Smart'; // ✅ Smart default sort (best funnel)
+
+  // UI state simulator (optional but helpful for production readiness)
+  bool _loading = false;
+  bool _error = false;
+
+  // UI-first placeholder data (wire Supabase later)
+  late final List<_ClientRequest> _items = [
+    _ClientRequest(
+      id: 'r1',
+      title: 'Help with shower + meal prep',
+      category: 'Personal Care',
+      status: 'Pending',
+      locationText: 'Near you',
+      priceText: '\$18–\$22/hr',
+      offersCount: 3,
+      updatedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+      scheduledAt: DateTime.now().add(const Duration(hours: 2)),
+      avgFirstResponseMinutes: 25,
+      durationText: '2 hrs',
+    ),
+    _ClientRequest(
+      id: 'r2',
+      title: 'Night shift companionship',
+      category: 'Companionship',
+      status: 'Sent',
+      locationText: '2.4 km away',
+      priceText: '\$16–\$20/hr',
+      offersCount: 0, // ✅ will be “Low interest” if old enough, and auto-boost if 24h+
+      updatedAt: DateTime.now().subtract(const Duration(hours: 26)), // ✅ triggers auto-boost
+      scheduledAt: DateTime.now().add(const Duration(days: 1)),
+      avgFirstResponseMinutes: 140,
+      durationText: '8 hrs',
+    ),
+    _ClientRequest(
+      id: 'r3',
+      title: 'Medication reminders',
+      category: 'Home Support',
+      status: 'Accepted',
+      locationText: 'Your area',
+      priceText: '\$14–\$18/hr',
+      offersCount: 5,
+      updatedAt: DateTime.now().subtract(const Duration(days: 1)),
+      scheduledAt: DateTime.now().add(const Duration(days: 2)),
+      avgFirstResponseMinutes: 35,
+      durationText: '1 hr',
+    ),
+    _ClientRequest(
+      id: 'r4',
+      title: 'Post-op help (mobility + meals)',
+      category: 'Nursing',
+      status: 'Completed',
+      locationText: 'New York',
+      priceText: '\$22–\$30/hr',
+      offersCount: 7,
+      updatedAt: DateTime.now().subtract(const Duration(days: 3)),
+      scheduledAt: DateTime.now().add(const Duration(days: 7)),
+      avgFirstResponseMinutes: 18,
+      durationText: '3 hrs',
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = false; // flip to true to test error UI
+    });
+  }
+
+  // ------------------------------------------------------------
+  // ✅ Feature 1: Auto-boost stale requests (no offers in 24h)
+  // ------------------------------------------------------------
+  bool _isBoosted(_ClientRequest r) {
+    final ageHours = DateTime.now().difference(r.updatedAt).inHours;
+    final eligibleStatus = (r.status == 'Pending' || r.status == 'Sent');
+    return eligibleStatus && r.offersCount == 0 && ageHours >= 24;
+  }
+
+  // ------------------------------------------------------------
+  // ✅ Feature 3: Request health indicator
+  // - High demand / Low interest / Good
+  // ------------------------------------------------------------
+  _RequestHealth _health(_ClientRequest r) {
+    final ageHours = DateTime.now().difference(r.updatedAt).inHours;
+
+    if (r.offersCount >= 5) return _RequestHealth.highDemand;
+    if (r.offersCount == 0 && ageHours >= 6) return _RequestHealth.lowInterest;
+    if (r.offersCount >= 2) return _RequestHealth.good;
+    return _RequestHealth.normal;
+  }
+
+  // ------------------------------------------------------------
+  // ✅ Feature 4: Caregiver response SLA badge (placeholder logic)
+  // ------------------------------------------------------------
+  String? _slaBadge(_ClientRequest r) {
+    final m = r.avgFirstResponseMinutes;
+    if (m == null) return null;
+    if (m <= 30) return 'Fast replies';
+    if (m <= 120) return 'Replies ~2h';
+    return 'Slow replies';
+  }
+
+  // ------------------------------------------------------------
+  // ✅ Feature 2: Smart default sort
+  // - Pending -> Most applicants
+  // - Accepted -> Nearest date
+  // - Completed -> Most recent
+  // ------------------------------------------------------------
+  String _smartSortForStatus(String status) {
+    switch (status) {
+      case 'Pending':
+        return 'Most applicants';
+      case 'Accepted':
+        return 'Nearest date';
+      case 'Completed':
+        return 'Most recent';
+      default:
+        return 'Most recent';
+    }
+  }
+
+  List<_ClientRequest> get _filtered {
+    final q = _search.text.trim().toLowerCase();
+
+    var list = _items.where((r) {
+      final matchesStatus = _statusFilter == 'All' ? true : r.status == _statusFilter;
+      final matchesQuery = q.isEmpty
+          ? true
+          : (r.title.toLowerCase().contains(q) ||
+              r.category.toLowerCase().contains(q) ||
+              r.locationText.toLowerCase().contains(q));
+      return matchesStatus && matchesQuery;
+    }).toList();
+
+    // Smart sort auto-applies if user didn't manually choose another sort
+    final effectiveSort = (_sort == 'Smart')
+        ? (_statusFilter == 'All' ? 'Most recent' : _smartSortForStatus(_statusFilter))
+        : _sort;
+
+    // 1) Auto-boost priority ALWAYS applies within status groups:
+    // boosted stale requests bubble up, because they need attention.
+    int boostedFirst(_ClientRequest a, _ClientRequest b) {
+      final ab = _isBoosted(a) ? 1 : 0;
+      final bb = _isBoosted(b) ? 1 : 0;
+      return bb.compareTo(ab); // boosted (1) first
+    }
+
+    // Sorting
+    if (effectiveSort == 'Most recent') {
+      list.sort((a, b) {
+        final p = boostedFirst(a, b);
+        if (p != 0) return p;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+    } else if (effectiveSort == 'Oldest') {
+      list.sort((a, b) {
+        final p = boostedFirst(a, b);
+        if (p != 0) return p;
+        return a.updatedAt.compareTo(b.updatedAt);
+      });
+    } else if (effectiveSort == 'Status') {
+      list.sort((a, b) {
+        final p = boostedFirst(a, b);
+        if (p != 0) return p;
+        return a.status.compareTo(b.status);
+      });
+    } else if (effectiveSort == 'Most applicants') {
+      list.sort((a, b) {
+        final p = boostedFirst(a, b);
+        if (p != 0) return p;
+        return b.offersCount.compareTo(a.offersCount);
+      });
+    } else if (effectiveSort == 'Nearest date') {
+      list.sort((a, b) {
+        final p = boostedFirst(a, b);
+        if (p != 0) return p;
+        final ad = a.scheduledAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.scheduledAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return ad.compareTo(bd);
+      });
+    }
+
+    return list;
+  }
+
+  void _openSortSheet() {
+    final options = const [
+      'Smart',
+      'Most recent',
+      'Oldest',
+      'Status',
+      'Most applicants',
+      'Nearest date',
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Sort', style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                ...options.map((o) {
+                  return RadioListTile<String>(
+                    value: o,
+                    groupValue: _sort,
+                    title: Text(o),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _sort = v);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openRequestActions(_ClientRequest r) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(r.title, style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _chipPill(r.category, Icons.category_outlined),
+                    _chipPill(_prettyWhen(r), Icons.schedule),
+                    _chipPill(r.locationText, Icons.place_outlined),
+                    _chipPill(r.priceText, Icons.payments_outlined),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Production: show timeline, offers, caregiver matches, chat shortcuts, and actions (edit/cancel/duplicate).',
+                  style: Theme.of(ctx).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('View details (UI-only placeholder)')),
+                          );
+                        },
+                        child: const Text('View details'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Edit request (UI-only placeholder)')),
+                          );
+                        },
+                        child: const Text('Edit'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _prettyWhen(_ClientRequest r) {
+    final d = r.scheduledAt;
+    if (d == null) return 'No schedule';
+    final now = DateTime.now();
+    final diff = d.difference(now);
+    if (diff.inDays == 0 && diff.inHours >= 0) return 'Today • ${r.durationText}';
+    if (diff.inDays == 1) return 'Tomorrow • ${r.durationText}';
+    if (diff.inDays > 1) return 'In ${diff.inDays} days • ${r.durationText}';
+    return 'Scheduled • ${r.durationText}';
+  }
+
+  Color? _healthColor(BuildContext context, _RequestHealth h) {
+    switch (h) {
+      case _RequestHealth.highDemand:
+        return Colors.green.shade100;
+      case _RequestHealth.lowInterest:
+        return Colors.orange.shade100;
+      case _RequestHealth.good:
+        return Colors.blue.shade100;
+      case _RequestHealth.normal:
+        return null;
+    }
+  }
+
+  String _healthLabel(_RequestHealth h) {
+    switch (h) {
+      case _RequestHealth.highDemand:
+        return 'High demand';
+      case _RequestHealth.lowInterest:
+        return 'Low interest';
+      case _RequestHealth.good:
+        return 'Good interest';
+      case _RequestHealth.normal:
+        return 'Normal';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final items = _filtered;
+
+    return Scaffold(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Requests', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  ),
+                  IconButton(
+                    tooltip: 'Sort',
+                    onPressed: _openSortSheet,
+                    icon: const Icon(Icons.sort),
+                  ),
+                  IconButton(
+                    tooltip: 'Filters',
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Filters (UI-only placeholder)')),
+                      );
+                    },
+                    icon: const Icon(Icons.tune),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              TextField(
+                controller: _search,
+                decoration: InputDecoration(
+                  hintText: 'Search requests…',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+
+              const SizedBox(height: 10),
+
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _statusChip('All'),
+                    const SizedBox(width: 8),
+                    _statusChip('Pending'),
+                    const SizedBox(width: 8),
+                    _statusChip('Sent'),
+                    const SizedBox(width: 8),
+                    _statusChip('Accepted'),
+                    const SizedBox(width: 8),
+                    _statusChip('Completed'),
+                    const SizedBox(width: 8),
+                    _statusChip('Cancelled'),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Showing ${items.length} • Sort: ${_sort == 'Smart' ? 'Smart' : _sort}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => context.go('/client/requests'), // placeholder to “new request” flow
+                    icon: const Icon(Icons.add),
+                    label: const Text('New'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              if (_loading) ...[
+                const _SkeletonCard(),
+                const _SkeletonCard(),
+              ] else if (_error) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Text('Could not load requests. Please try again.')),
+                        TextButton(onPressed: _refresh, child: const Text('Retry')),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else if (items.isEmpty) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.inbox_outlined, size: 56),
+                        const SizedBox(height: 12),
+                        Text('No requests found', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Post a request to start getting offers from caregivers.',
+                          style: theme.textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          onPressed: () => context.go('/client/requests'),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Post a request'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else ...[
+                ...items.map((r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _requestCard(context, r),
+                    )),
+              ],
+
+              const SizedBox(height: 12),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('How offers work', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Caregivers can send offers for your request. Review profiles, chat in-app, and confirm details before booking.',
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Learn more (UI-only placeholder)')),
+                          );
+                        },
+                        child: const Text('Learn more'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      // ✅ persistent CTA (main funnel)
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          child: SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () => context.go('/client/requests'),
+              icon: const Icon(Icons.add),
+              label: const Text('Post a request'),
+              style: ElevatedButton.styleFrom(
+                shape: const StadiumBorder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(String label) {
+    final selected = _statusFilter == label;
+    return ChoiceChip(
+      selected: selected,
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false),
+      onSelected: (_) {
+        setState(() {
+          _statusFilter = label;
+          // Smart sort stays smart; if user set manual sort, do not override
+          // (best UX)
+        });
+      },
+    );
+  }
+
+  Widget _requestCard(BuildContext context, _ClientRequest r) {
+    final theme = Theme.of(context);
+
+    final boosted = _isBoosted(r);
+    final health = _health(r);
+    final sla = _slaBadge(r);
+
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openRequestActions(r),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.assignment_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      r.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _statusPill(r.status),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _chipPill(r.category, Icons.category_outlined),
+                  _chipPill(_prettyWhen(r), Icons.schedule),
+                  _chipPill(r.locationText, Icons.place_outlined),
+                  _chipPill(r.priceText, Icons.payments_outlined),
+                  _chipPill('${r.offersCount} offer(s)', Icons.group_outlined),
+                  if (boosted) _chipPill('Boosted', Icons.rocket_launch_outlined),
+                  _healthPill(context, health),
+                  if (sla != null) _chipPill(sla, Icons.timer_outlined),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Updated ${_timeAgo(r.updatedAt)}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _openRequestActions(r),
+                    child: const Text('View'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusPill(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Text(status, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+
+  Widget _healthPill(BuildContext context, _RequestHealth h) {
+    final bg = _healthColor(context, h);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Text(_healthLabel(h), style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+
+  Widget _chipPill(String text, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false),
+        ],
+      ),
+    );
+  }
+
+  String _timeAgo(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(height: 16, width: 180, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(6))),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(
+                5,
+                (_) => Container(height: 28, width: 110, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(999))),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _RequestHealth { highDemand, lowInterest, good, normal }
+
+class _ClientRequest {
+  final String id;
+  final String title;
+  final String category;
+  final String status;
+  final String locationText;
+  final String priceText;
+  final int offersCount;
+
+  final DateTime updatedAt;
+  final DateTime? scheduledAt;
+  final int? avgFirstResponseMinutes;
+
+  final String durationText;
+
+  const _ClientRequest({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.status,
+    required this.locationText,
+    required this.priceText,
+    required this.offersCount,
+    required this.updatedAt,
+    required this.scheduledAt,
+    required this.avgFirstResponseMinutes,
+    required this.durationText,
+  });
+}

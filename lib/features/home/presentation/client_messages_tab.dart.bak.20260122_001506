@@ -1,0 +1,12 @@
+import 'package:flutter/material.dart';
+import '../../chat/presentation/client_messages_screen.dart';
+
+/// Client Messages tab entry point (router-safe).
+class ClientMessagesTabScreen extends StatelessWidget {
+  const ClientMessagesTabScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ClientMessagesScreen();
+  }
+}

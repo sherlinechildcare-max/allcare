@@ -1,0 +1,164 @@
+import '../../features/home/presentation/client_home_tab.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Your existing screens (keep these imports if the files exist in your project).
+import '../../features/auth/role_select_screen.dart';
+import '../../features/dev/presentation/dev_menu_screen.dart';
+import '../../features/home/ui/main_shell.dart';
+
+// If you created these files already, keep them. If not, we’ll use the inline placeholders below.
+import '../../features/app_start/splash_screen.dart';
+import '../../features/onboarding/onboarding_screen.dart';
+
+class AppRouter {
+  static final _supabase = Supabase.instance.client;
+
+  /// Toggle UX-first UI mode (no auth requirement) by setting this to true.
+  /// For now: TRUE = you can navigate and view screens without OTP/auth working.
+  static const bool uiMode = true;
+
+  static final GoRouter router = GoRouter(
+    initialLocation: '/splash',
+    refreshListenable: GoRouterRefreshStream(_supabase.auth.onAuthStateChange),
+    redirect: (context, state) {
+      if (uiMode) return null; // UX-first: no redirects.
+
+      final session = _supabase.auth.currentSession;
+      final loggedIn = session != null;
+
+      final goingToAuth = state.matchedLocation.startsWith('/auth');
+
+      if (!loggedIn && !goingToAuth) return '/auth';
+      if (loggedIn && goingToAuth) return '/client/home';
+
+      return null;
+    },
+    routes: [
+      // --- START FLOW (UX-first) ---
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+
+      // --- AUTH (later logic) ---
+      GoRoute(
+        path: '/auth',
+        builder: (context, state) => const RoleSelectScreen(),
+      ),
+
+      // --- DEV HUB / DEV MENU ---
+      GoRoute(path: '/dev', builder: (context, state) => const DevMenuScreen()),
+
+      // --- PLACEHOLDERS (caregiver/agency/admin UI shells) ---
+      GoRoute(
+        path: '/caregiver',
+        builder: (context, state) => const _PlaceholderScreen(
+          title: 'Caregiver App',
+          subtitle: 'Caregiver dashboard & requests (UI-only for now)',
+          icon: Icons.volunteer_activism,
+        ),
+      ),
+      GoRoute(
+        path: '/agency',
+        builder: (context, state) => const _PlaceholderScreen(
+          title: 'Agency App',
+          subtitle: 'Manage caregivers & operations (UI-only for now)',
+          icon: Icons.apartment,
+        ),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const _PlaceholderScreen(
+          title: 'Admin Panel',
+          subtitle: 'Moderation & system control (UI-only for now)',
+          icon: Icons.admin_panel_settings,
+        ),
+      ),
+
+      // --- CLIENT SHELL WITH BOTTOM NAV ---
+      ShellRoute(
+        builder: (context, state, child) => MainShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/client/home',
+            builder: (context, state) => const ClientHomeTabScreen(),
+          ),
+          GoRoute(
+            path: '/client/requests',
+            builder: (context, state) => const ClientRequestsTab(),
+          ),
+          GoRoute(
+            path: '/client/messages',
+            builder: (context, state) => const ClientMessagesTab(),
+          ),
+          GoRoute(
+            path: '/client/profile',
+            builder: (context, state) => const ClientProfileTab(),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// Makes GoRouter refresh when Supabase auth stream changes.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _sub = stream.listen((_) => notifyListeners());
+  }
+  late final StreamSubscription<dynamic> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
+class _PlaceholderScreen extends StatelessWidget {
+  const _PlaceholderScreen({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 72),
+              const SizedBox(height: 16),
+              Text(title, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text(subtitle, textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => context.push('/dev'),
+                child: const Text('Back to Dev Hub'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

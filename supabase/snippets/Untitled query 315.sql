@@ -1,0 +1,1 @@
+select user_id, role, onboarding_completed from profiles;

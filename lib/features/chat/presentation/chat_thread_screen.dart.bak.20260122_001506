@@ -1,0 +1,276 @@
+import 'package:flutter/material.dart';
+import 'client_messages_screen.dart';
+
+class ChatThreadScreen extends StatefulWidget {
+  const ChatThreadScreen({super.key, required this.conversation});
+
+  final dynamic conversation; // we pass _ConversationPreview from inbox (UI-only)
+
+  @override
+  State<ChatThreadScreen> createState() => _ChatThreadScreenState();
+}
+
+class _ChatThreadScreenState extends State<ChatThreadScreen> {
+  final _scrollCtrl = ScrollController();
+  final _textCtrl = TextEditingController();
+
+  late final String _title;
+
+  // UI-only thread messages.
+  final List<_ChatMessage> _messages = [
+    _ChatMessage(
+      id: 'm1',
+      text: 'Hi! I’m on my way. Any special instructions for entry?',
+      isMe: false,
+      minutesAgo: 65,
+    ),
+    _ChatMessage(
+      id: 'm2',
+      text: 'Great — please use the side door and ring bell #2.',
+      isMe: true,
+      minutesAgo: 62,
+    ),
+    _ChatMessage(
+      id: 'm3',
+      text: "Thanks! What’s the parking situation?",
+      isMe: false,
+      minutesAgo: 60,
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _title = (widget.conversation?.title?.toString() ?? 'Chat');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    _textCtrl.dispose();
+    super.dispose();
+  }
+
+  void _jumpToBottom() {
+    if (!_scrollCtrl.hasClients) return;
+    _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+  }
+
+  Future<void> _scrollToBottom() async {
+    if (!_scrollCtrl.hasClients) return;
+    await _scrollCtrl.animateTo(
+      _scrollCtrl.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _send() {
+    final text = _textCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add(
+        _ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: text,
+          isMe: true,
+          minutesAgo: 0,
+        ),
+      );
+      _textCtrl.clear();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_title),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              showModalBottomSheet<void>(
+                context: context,
+                useSafeArea: true,
+                showDragHandle: true,
+                builder: (ctx) => Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.info_outline),
+                        title: const Text('Conversation details'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('UI-only placeholder')),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.report_outlined),
+                        title: const Text('Report'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('UI-only placeholder')),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.block),
+                        title: const Text('Block'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('UI-only placeholder')),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                itemCount: _messages.length,
+                itemBuilder: (context, i) {
+                  final m = _messages[i];
+                  return _Bubble(message: m);
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            _Composer(
+              controller: _textCtrl,
+              onSend: _send,
+              onAttach: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Attach (UI-only placeholder)')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Composer extends StatelessWidget {
+  const _Composer({
+    required this.controller,
+    required this.onSend,
+    required this.onAttach,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSend;
+  final VoidCallback onAttach;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Attach',
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: onAttach,
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              minLines: 1,
+              maxLines: 5,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: 'Message…',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              onSubmitted: (_) => onSend(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Send',
+            icon: const Icon(Icons.send),
+            onPressed: onSend,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bubble extends StatelessWidget {
+  const _Bubble({required this.message});
+
+  final _ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMe = message.isMe;
+    final bubbleColor = isMe
+        ? Theme.of(context).colorScheme.primaryContainer
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    final textColor = Theme.of(context).colorScheme.onSurface;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            message.text,
+            style: TextStyle(color: textColor, height: 1.25),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatMessage {
+  _ChatMessage({
+    required this.id,
+    required this.text,
+    required this.isMe,
+    required this.minutesAgo,
+  });
+
+  final String id;
+  final String text;
+  final bool isMe;
+  final int minutesAgo;
+}
