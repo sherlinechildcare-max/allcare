@@ -1,0 +1,30 @@
+import 'package:flutter/material.dart';
+
+class ClientRequestsTabScreen extends StatelessWidget {
+  const ClientRequestsTabScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.assignment_outlined, size: 48),
+            SizedBox(height: 12),
+            Text(
+              'No requests yet',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'When you send a care request, it will appear here.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

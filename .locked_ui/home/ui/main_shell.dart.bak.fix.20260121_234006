@@ -1,0 +1,9 @@
+
+/// ---- Client tab widget factories (production-safe) ----
+/// AppRouter can call these to get the tab widgets.
+///
+/// Keep these as functions (not wrapper classes) to avoid type/extends issues.
+Widget clientHomeTab() => const ClientHomeTabScreen();
+Widget clientRequestsTab() => const ClientRequestsTabScreen();
+Widget clientMessagesTab() => const ClientMessagesTabScreen();
+Widget clientProfileTab() => const ClientProfileTabScreen();
